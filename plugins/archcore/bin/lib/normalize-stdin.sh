@@ -99,16 +99,29 @@ case "$ARCHCORE_HOST" in
     # Native camelCase payload: toolName + toolArgs (an ESCAPED JSON string,
     # so field extraction goes through the unescaped helper, which also
     # handles plain objects). Legacy Claude-compat payloads (hookEventName +
-    # snake_case tool_input) extract via the tool_name fallback. The toolArgs
-    # key candidates (file_path/filePath/path) are provisional until real
-    # payload captures land — see copilot-host-support.rnd Next Action.
+    # snake_case tool_input) extract via the tool_name fallback. Native file
+    # tools use an absolute path key (verified against Copilot CLI 1.0.73).
     ARCHCORE_TOOL_NAME=$(_archcore_json_val "toolName")
     if [ -z "$ARCHCORE_TOOL_NAME" ]; then
       ARCHCORE_TOOL_NAME=$(_archcore_json_val "tool_name")
     fi
+    case "$ARCHCORE_TOOL_NAME" in
+      archcore-*)
+        # Copilot prefixes MCP tools with "<server>-"; normalize to the
+        # canonical name consumed by the shared post-tool scripts.
+        ARCHCORE_TOOL_NAME="mcp__archcore__${ARCHCORE_TOOL_NAME#archcore-}"
+        ;;
+    esac
     ARCHCORE_FILE_PATH=$(_archcore_json_val_unescaped "file_path")
     if [ -z "$ARCHCORE_FILE_PATH" ]; then
       ARCHCORE_FILE_PATH=$(_archcore_json_val_unescaped "filePath")
+    fi
+    if [ -z "$ARCHCORE_FILE_PATH" ]; then
+      case "$ARCHCORE_TOOL_NAME" in
+        create|edit|str_replace_editor|apply_patch)
+          ARCHCORE_FILE_PATH=$(_archcore_json_val_unescaped "path")
+          ;;
+      esac
     fi
     ARCHCORE_DOC_PATH=$(_archcore_json_val "path")
     if [ -z "$ARCHCORE_DOC_PATH" ]; then
